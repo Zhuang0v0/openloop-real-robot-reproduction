@@ -1,0 +1,50 @@
+# IDE, browser and Python by-products
+.playwright-cli/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+**/.venv/
+.pytest_cache/
+
+# Credentials and local authenticated sessions
+.env
+.env.*
+**/*.dpapi
+**/session/
+**/queue/
+**/requests/
+**/responses/
+
+# Local archives, datasets, media, models and run artifacts
+data/
+models/
+runs/
+checkpoints/
+logs/
+outputs/
+vendor/FastWAM/
+**/data/**/*.mp4
+**/data/**/*.parquet
+**/data/**/*.pt
+**/data/**/*.pth
+**/data/**/*.safetensors
+*.npz
+*.pt
+*.pth
+*.safetensors
+*.tar
+*.tar.gz
+*.zip
+*.mp4
+*.mcap
+*.parquet
+*.h5
+*.hdf5
+
+# Partial downloads and generated caches
+*.partial
+**/.cache/
+
+# Nested repository metadata must not be vendored into this project
+**/.git/
