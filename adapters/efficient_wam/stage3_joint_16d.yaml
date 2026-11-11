@@ -1,7 +1,7 @@
 # Optional Stage 3 follow-up after a validated Stage 2 export.
 system: stage3_joint
 training_stage: stage3
-name: building_block_towers_stage3_16d
+name: classify_objects_stage3_16d
 max_steps: 1000
 per_device_batch_size: 1
 gradient_accumulation_steps: 8

@@ -107,6 +107,18 @@ def build_arg_parser(description: str, default_config: str) -> argparse.Argument
         help="Override gradient accumulation steps",
     )
     parser.add_argument(
+        "--max_steps",
+        type=int,
+        default=None,
+        help="Override the configured training step count (use 1 for a smoke test)",
+    )
+    parser.add_argument(
+        "--checkpoint_interval",
+        type=int,
+        default=None,
+        help="Override checkpoint save interval",
+    )
+    parser.add_argument(
         "--per_device_batch_size",
         type=int,
         default=None,
@@ -145,6 +157,14 @@ def apply_cli_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dic
         config.setdefault("model", {})["efficient_wam_init_checkpoint"] = args.efficient_wam_init_checkpoint
     if args.gradient_accumulation_steps is not None:
         config["gradient_accumulation_steps"] = int(args.gradient_accumulation_steps)
+    if args.max_steps is not None:
+        if int(args.max_steps) < 1:
+            raise ValueError("max_steps must be at least 1")
+        config["max_steps"] = int(args.max_steps)
+    if args.checkpoint_interval is not None:
+        if int(args.checkpoint_interval) < 1:
+            raise ValueError("checkpoint_interval must be at least 1")
+        config["checkpoint_interval"] = int(args.checkpoint_interval)
     if args.per_device_batch_size is not None:
         config["per_device_batch_size"] = int(args.per_device_batch_size)
     if args.num_workers is not None:

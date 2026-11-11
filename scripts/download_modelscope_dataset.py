@@ -46,7 +46,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--repo',
-        default=os.environ.get('MODELSCOPE_DATASET_REPO', 'XinyaoZhuang/nero_building_block_tower'),
+        default=os.environ.get('MODELSCOPE_DATASET_REPO', 'XinyaoZhuang/nero_classify_objects'),
         help='ModelScope dataset repository (default: %(default)s)',
     )
     parser.add_argument(

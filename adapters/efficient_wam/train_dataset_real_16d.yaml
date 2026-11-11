@@ -1,14 +1,14 @@
-# Efficient-WAM packer config for the 100-episode building-block recording.
-# The converter writes clean/building_block_towers with separate state/*.pt
+# Efficient-WAM packer config for the Classify Objects recording.
+# The converter writes clean/classify_objects with separate state/*.pt
 # and qpos/*.pt files; the loader patch consumes state for initial_state.
-name: building_block_towers_efficient_wam_16d
+name: classify_objects_efficient_wam_16d
 output_root: __RUN_ROOT__/efficient_wam_train_dataset_16d
 
 source:
   type: robotwin
   root: __RUN_ROOT__/efficient_wam_source_16d
   task_mode: single
-  task_name: building_block_towers
+  task_name: classify_objects
   data_mode: clean
   num_video_frames: 8
   video_size: [384, 320]

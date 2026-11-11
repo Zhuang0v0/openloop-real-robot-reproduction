@@ -6,25 +6,39 @@ DATA_ROOT="${DATA_ROOT:-$PROJECT_ROOT/data}"
 RUN_ROOT="${RUN_ROOT:-$PROJECT_ROOT/runs}"
 EFFICIENT_WAM_ROOT="${EFFICIENT_WAM_ROOT:-$PROJECT_ROOT/vendor/Efficient-WAM}"
 ADAPTER_ROOT="${ADAPTER_ROOT:-$PROJECT_ROOT/adapters/efficient_wam}"
-SRC="${DATASET_ROOT:-$DATA_ROOT/building_block_towers}"
+SRC="${DATASET_ROOT:-$DATA_ROOT/nero_classify_objects}"
 OUT="${EFFICIENT_SOURCE_ROOT:-$RUN_ROOT/efficient_wam_source_16d}"
-TASK="$OUT/clean/building_block_towers"
+TASK_NAME="${TASK_NAME:-classify_objects}"
+INSTRUCTION="${INSTRUCTION:-Put all fruits into the large basket first, then put all blocks into the small basket.}"
+TASK="$OUT/clean/$TASK_NAME"
 WAN="${WAN_MODEL_ROOT:-${MODEL_ROOT:-$PROJECT_ROOT/models}/Wan2.2-TI2V-5B}"
-END_EPISODE=${END_EPISODE:-99}
-EXPECTED_EPISODES=${EXPECTED_EPISODES:-100}
+DEVICE="${EFFICIENT_DEVICE:-cuda:0}"
+START_EPISODE=${START_EPISODE:-0}
+END_EPISODE=${END_EPISODE:-105}
+EXPECTED_EPISODES=${EXPECTED_EPISODES:-106}
+EPISODE_IDS_FILE="${EPISODE_IDS_FILE:-}"
 
 command -v "$PYTHON_BIN" >/dev/null
-"$PYTHON_BIN" "$ADAPTER_ROOT/lerobot_to_robotwin_clean.py" \
-  --dataset-root "$SRC" \
-  --video-root "$SRC" \
-  --output-root "$OUT" \
-  --start-episode 0 --end-episode "$END_EPISODE"
+CONVERTER_ARGS=(
+  --dataset-root "$SRC"
+  --video-root "$SRC"
+  --output-root "$OUT"
+  --task-name "$TASK_NAME"
+  --instruction "$INSTRUCTION"
+  --start-episode "$START_EPISODE"
+  --end-episode "$END_EPISODE"
+)
+if [[ -n "$EPISODE_IDS_FILE" ]]; then
+  CONVERTER_ARGS+=(--episode-ids-file "$EPISODE_IDS_FILE")
+fi
+"$PYTHON_BIN" "$ADAPTER_ROOT/lerobot_to_robotwin_clean.py" "${CONVERTER_ARGS[@]}"
+
 
 "$PYTHON_BIN" "$ADAPTER_ROOT/generate_umt5_wan.py" \
   --repo-root "$EFFICIENT_WAM_ROOT" \
   --wan-root "$WAN" \
   --task-root "$TASK" \
-  --device cuda:0
+  --device "$DEVICE"
 
 echo '=== clean source counts ==='
 find "$TASK/qpos" -name '*.pt' | wc -l

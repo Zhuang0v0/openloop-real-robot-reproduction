@@ -4,36 +4,47 @@ PROJECT_ROOT="${PROJECT_ROOT:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 DATA_ROOT="${DATA_ROOT:-$PROJECT_ROOT/data}"
 RUN_ROOT="${RUN_ROOT:-$PROJECT_ROOT/runs}"
-DATA="${DATASET_ROOT:-$DATA_ROOT/building_block_towers}"
+DATA="${DATASET_ROOT:-$DATA_ROOT/nero_classify_objects}"
 OUT="${FASTWAM_STATS_FILE:-$RUN_ROOT/fastwam_real/dataset_stats.json}"
-EXPECTED_EPISODES=${EXPECTED_EPISODES:-100}
+EXPECTED_EPISODES=${EXPECTED_EPISODES:-106}
+MANIFEST="${FASTWAM_STATS_MANIFEST:-}"
 mkdir -p "$(dirname "$OUT")"
-DATA="$DATA" OUT="$OUT" EXPECTED_EPISODES="$EXPECTED_EPISODES" "$PYTHON_BIN" - <<'PY'
-import json, os
+DATA="$DATA" OUT="$OUT" EXPECTED_EPISODES="$EXPECTED_EPISODES" MANIFEST="$MANIFEST" PROJECT_ROOT="$PROJECT_ROOT" "$PYTHON_BIN" - <<'PY'
+import csv
+import json, os, sys
 from pathlib import Path
-import re
 import numpy as np
-import pyarrow.parquet as pq
+sys.path.insert(0, os.environ['PROJECT_ROOT'])
+from tools.analyze_classify_actions import load_episodes
 
 root = Path(os.environ['DATA'])
 expected_episodes = int(os.environ['EXPECTED_EPISODES'])
-files = sorted((root / 'data').rglob('episode_*.parquet')) or sorted(root.rglob('episode_*.parquet'))
-if len(files) != expected_episodes:
-    raise RuntimeError(f'expected {expected_episodes} episode parquet files, found {len(files)}')
-def episode_id(path):
-    match = re.search(r'episode_(\d+)\.parquet$', path.name)
-    if not match:
-        raise RuntimeError(f'cannot parse episode id from {path}')
-    return int(match.group(1))
-ids = sorted(episode_id(path) for path in files)
-if ids != list(range(expected_episodes)):
-    raise RuntimeError(f'expected episode ids 0..{expected_episodes - 1}, found {ids}')
+episodes = {int(item.episode_id): item for item in load_episodes(root)}
+manifest = os.environ.get('MANIFEST', '').strip()
+if manifest:
+    selected = set()
+    with Path(manifest).open(encoding='utf-8-sig', newline='') as handle:
+        for row in csv.DictReader(handle):
+            raw = row.get('episode_id', row.get('episode_index', ''))
+            if str(row.get('selected', 'true')).strip().lower() in {'0', 'false', 'no', 'off', 'rejected', 'drop'}:
+                continue
+            if raw is not None and str(raw).strip():
+                selected.add(int(float(raw)))
+    missing = sorted(selected - set(episodes))
+    if missing:
+        raise RuntimeError(f'manifest references missing episodes: {missing}')
+    episodes = {episode_id: episodes[episode_id] for episode_id in sorted(selected)}
+ids = sorted(episodes)
+if expected_episodes > 0 and len(ids) != expected_episodes:
+    raise RuntimeError(f'expected {expected_episodes} selected episodes, found {len(ids)}: {ids}')
+if not ids:
+    raise RuntimeError('no episodes available for FastWAM statistics')
 
 arrays = {'action': [], 'state': []}
-for path in files:
-    table = pq.read_table(path, columns=['action', 'observation.state'])
-    arrays['action'].append(np.asarray(table['action'].to_pylist(), dtype=np.float32))
-    arrays['state'].append(np.asarray(table['observation.state'].to_pylist(), dtype=np.float32))
+for episode_id in ids:
+    item = episodes[episode_id]
+    arrays['action'].append(np.asarray(item.action, dtype=np.float32))
+    arrays['state'].append(np.asarray(item.state, dtype=np.float32))
 
 def stats(values):
     data = np.concatenate(values, axis=0)
@@ -52,14 +63,14 @@ def stats(values):
 payload = {
     'action': {'default': stats(arrays['action'])},
     'state': {'default': stats(arrays['state'])},
-    'num_episodes': len(files),
-    'training_episode_ids': list(range(expected_episodes)),
-    'stats_scope': f'all {expected_episodes} episodes; no held-out evaluation split',
+    'num_episodes': len(ids),
+    'training_episode_ids': ids,
+    'stats_scope': f'all {len(ids)} selected episodes',
     'num_transition': int(sum(x.shape[0] for x in arrays['action'])),
 }
 target = Path(os.environ['OUT'])
 tmp = target.with_suffix('.json.partial')
 tmp.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 tmp.replace(target)
-print(json.dumps({'output': str(target), 'episodes': len(files), 'transitions': payload['num_transition'], 'action_mean': payload['action']['default']['global_mean'], 'state_mean': payload['state']['default']['global_mean']}, indent=2))
+print(json.dumps({'output': str(target), 'episodes': len(ids), 'transitions': payload['num_transition'], 'action_mean': payload['action']['default']['global_mean'], 'state_mean': payload['state']['default']['global_mean']}, indent=2))
 PY

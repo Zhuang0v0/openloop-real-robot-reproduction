@@ -1,0 +1,36 @@
+# Classify Objects is intentionally a single-task experiment.
+task_name: classify_objects
+instruction: "Put all fruits into the large basket first, then put all blocks into the small basket."
+excel_sheet: "classify objects"
+expected_episodes: 106
+episode_id_min: 0
+episode_id_max: 105
+
+# The four groups describe scene layout only. They do not select different text prompts.
+groups:
+  C1: {count: 27, fruit_area: left, block_area: right, large_basket: left, small_basket: right}
+  C2: {count: 26, fruit_area: left, block_area: right, large_basket: right, small_basket: left}
+  C3: {count: 27, fruit_area: right, block_area: left, large_basket: left, small_basket: right}
+  C4: {count: 26, fruit_area: right, block_area: left, large_basket: right, small_basket: left}
+
+cameras:
+  - observation.images.camera_3
+  - observation.images.left_wrist
+  - observation.images.right_wrist
+state_key: observation.state
+action_key: action
+expected_action_dim: 16
+expected_state_dim: 16
+control_frequency_hz: 30
+
+# A manifest is authoritative. Never infer labels from sorted file names.
+manifest_fields:
+  - episode_id
+  - group
+  - group_index
+  - quality_raw
+  - quality_score
+  - quality_status
+  - note
+  - prompt
+  - match_status

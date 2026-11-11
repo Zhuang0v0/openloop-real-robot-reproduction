@@ -1,0 +1,36 @@
+# Four comparable data strategies. Filtering is applied to complete windows;
+# no middle frames are deleted and concatenated into a new trajectory.
+window:
+  observation_horizon: 2
+  action_horizon: 16
+  execution_horizon: 8
+  stride: 1
+  drop_last_incomplete: true
+  min_valid_fraction: 1.0
+
+quality:
+  score_thresholds: [0.7, 0.8, 0.9]
+  unknown_score: keep_for_baseline_only
+
+action:
+  robust_z: 6.0
+  mad_floor: 1.0e-6
+  pause_seconds: 0.50
+  max_window_anomaly_fraction: 0.25
+  # Physical limits are supplied per robot/data export, not guessed globally.
+  velocity_limits: null
+  acceleration_limits: null
+  jerk_limits: null
+  gripper_indices: [7, 15]
+
+split:
+  validation_fraction: 0.20
+  seed: 20261111
+  group_stratified: true
+  split_unit: episode
+
+strategies:
+  - baseline
+  - quality
+  - action
+  - combined

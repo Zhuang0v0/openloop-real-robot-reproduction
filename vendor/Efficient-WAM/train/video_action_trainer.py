@@ -71,10 +71,26 @@ class VideoActionTrainer:
         self.system = self._build_system()
         self.optimizer, self.scheduler = self._build_optimizer_and_scheduler()
         self._verify_trainable_setup_before_prepare()
+        # The RT recipe trains on a ten-point flow-matching schedule while
+        # retaining a 1000-unit continuous timestep scale.  Keep 1000 as the
+        # backwards-compatible default for older configs, but allow a stage
+        # config to state the intended number of denoising bins explicitly.
+        flow_cfg = config.get("flow_matching", {})
+        if not isinstance(flow_cfg, dict):
+            flow_cfg = {}
+        train_steps = int(
+            config.get(
+                "training_denoising_steps",
+                flow_cfg.get("training_denoising_steps", 1000),
+            )
+        )
+        if train_steps < 2:
+            raise ValueError("training_denoising_steps must be at least 2")
+        self.training_denoising_steps = train_steps
         self.fm_train_scheduler_action = FlowMatchScheduler(shift=5.0, sigma_min=0.0, extra_one_step=True)
-        self.fm_train_scheduler_action.set_timesteps(num_inference_steps=1000, training=True)
+        self.fm_train_scheduler_action.set_timesteps(num_inference_steps=train_steps, training=True)
         self.fm_train_scheduler_video = FlowMatchScheduler(shift=5.0, sigma_min=0.0, extra_one_step=True)
-        self.fm_train_scheduler_video.set_timesteps(num_inference_steps=1000, training=True)
+        self.fm_train_scheduler_video.set_timesteps(num_inference_steps=train_steps, training=True)
         self._cache_scheduler_tensors()
         self.global_step = 0
         self._condition_latent_reuse_checked = False
@@ -620,7 +636,7 @@ class VideoActionTrainer:
 
         video_timestep_id = torch.randint(
             0,
-            self.fm_train_scheduler_video.num_train_timesteps,
+            len(self._video_timesteps),
             (batch_size,),
             device=self.device,
         )
@@ -640,7 +656,7 @@ class VideoActionTrainer:
             video_target[:, :, 0:1] = 0
             prepared["video_latent"] = video_latent
 
-        timestep_id = torch.randint(0, self.fm_train_scheduler_action.num_train_timesteps, (batch_size,), device=self.device)
+        timestep_id = torch.randint(0, len(self._action_timesteps), (batch_size,), device=self.device)
         action_t = self._action_timesteps[timestep_id]
         sigma = self._action_sigmas[timestep_id].view(batch_size, 1, 1)
         noise = torch.randn_like(actions, dtype=dtype)

@@ -1,0 +1,67 @@
+# Classify Objects Stage 2: action adaptation with frozen WAN/video expert.
+system: stage2_action
+training_stage: stage2
+name: classify_objects_stage2_16d
+# Efficient-WAM-RT training uses ten flow-matching denoising bins.  This is
+# distinct from inference.video_refresh_steps below: inference runs ten total
+# action steps but refreshes the video branch only at steps 0 and 1.
+training_denoising_steps: 10
+max_steps: 1500
+per_device_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 5.0e-6
+weight_decay: 1.0e-3
+min_lr_ratio: 0.00001
+num_workers: 2
+pin_memory: true
+prefetch_factor: 2
+persistent_workers: true
+checkpoint_dir: __RUN_ROOT__/efficient_checkpoints
+checkpoint_interval: 250
+checkpoint_total_limit: 4
+log_interval: 10
+report_to: tensorboard
+resume_from: ""
+
+performance:
+  reuse_condition_latent_from_clean: true
+  verify_condition_latent_reuse: true
+
+dataset:
+  root: __RUN_ROOT__/efficient_train_dataset
+  type: efficient_wam_train
+  max_open_shards: 4
+  validate_runtime: true
+  language_policy: first
+  sampling:
+    mode: per_episode_random
+    samples_per_episode: 32
+    seed: 20261111
+
+model:
+  compact_wan_checkpoint: __MODEL_ROOT__/Efficient-WAM-RT_compact_16d.pt
+  efficient_wam_init_checkpoint: __MODEL_ROOT__/Efficient-WAM-RT_stage3_16d.pt
+  compact_wan:
+    checkpoint_path: __WAN_MODEL_ROOT__
+    config_path: __WAN_MODEL_ROOT__
+    vae_path: __WAN_MODEL_ROOT__/Wan2.2_VAE.pth
+    precision: bfloat16
+    dim: 2048
+    ffn_dim: 8192
+    num_heads: 16
+    num_layers: 12
+    head_dim: 128
+    future_video_size: [192, 160]
+  action_expert:
+    dim: 768
+    ffn_dim: 3072
+    num_layers: 12
+    chunk_size: 16
+    state_dim: 16
+    action_dim: 16
+  wan_frozen: true
+
+loss:
+  type: mot_joint_flow_matching
+  action_weight: 1.0
+  video_weight: 0.01

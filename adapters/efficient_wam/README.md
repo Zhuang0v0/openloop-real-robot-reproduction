@@ -10,12 +10,12 @@ Run from the repository root (or replace the paths with your own data volume):
 
 ```bash
 python adapters/efficient_wam/audit_convert.py audit \
-  --dataset-root data/building_block_towers \
+  --dataset-root data/nero_classify_objects \
   --output runs/efficient_wam_audit \
   --probe-videos
 
 python adapters/efficient_wam/audit_convert.py stage \
-  --dataset-root data/building_block_towers \
+  --dataset-root data/nero_classify_objects \
   --output runs/efficient_wam_staged \
   --copy-mode hardlink \
   --write-torch

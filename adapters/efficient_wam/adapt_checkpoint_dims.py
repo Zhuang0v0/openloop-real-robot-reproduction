@@ -2,13 +2,13 @@
 """Expand an Efficient-WAM action expert checkpoint from 14D to 16D.
 
 The released RT checkpoint is configured for RoboTwin's 14-dimensional robot
-(six arm joints plus one gripper per arm).  The building-block dataset has
-separate 16-dimensional state and action vectors (seven joints plus one
-gripper per arm).  This tool copies the pretrained dimensions according to an
-explicit old-index -> new-index map and initializes only the two new joint
-dimensions in the state/action input MLPs and action output head.  It never
-silently crops dimensions and it fails if an unexpected shape mismatch is
-found.
+(six arm joints plus one gripper per arm).  The Classify Objects real-robot
+recording has separate 16-dimensional state and action vectors (seven joints
+plus one gripper per arm).  This tool copies the pretrained dimensions
+according to an explicit old-index -> new-index map and initializes only the
+two new joint dimensions in the state/action input MLPs and action output
+head.  It never silently crops dimensions and it fails if an unexpected shape
+mismatch is found.
 
 This is an offline checkpoint transform; it does not instantiate WAN or run a
 forward pass.  Run it in the Efficient-WAM environment where PyTorch is
@@ -37,10 +37,11 @@ REQUIRED_LAYERS = {
 
 # RoboTwin's released 14D policy uses
 #   [left joint 1..6, left gripper, right joint 1..6, right gripper].
-# The building-block LeRobot recording is
+# The real-robot LeRobot recording is
 #   [left joint 1..7, left gripper, right joint 1..7, right gripper].
 # This map is old-index -> new-index.  The two new 7th-joint slots are zero
 # initialized; all pretrained gripper/joint channels retain their semantics.
+# Kept under the historical constant name for checkpoint/report compatibility.
 ROBOTWIN_14_TO_BUILDING_BLOCK_16 = (0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15)
 
 
@@ -239,7 +240,7 @@ def adapt_state_dict(
         and old_state_dim in (None, 14)
         and old_action_dim in (None, 14)
     ):
-        # Make the known RoboTwin -> building-block layout the safe default
+        # Make the known RoboTwin -> real-robot layout the safe default
         # even for callers that omit checkpoint metadata.  A non-14D source
         # then fails map validation instead of silently using positional append.
         index_map = ROBOTWIN_14_TO_BUILDING_BLOCK_16
@@ -312,7 +313,7 @@ def adapt_state_dict(
         "index_map_old_to_new": list(index_map) if index_map is not None else None,
         "index_map_semantics": (
             "RoboTwin14_[L1..L6,Lgrip,R1..R6,Rgrip] -> "
-            "building_block16_[L1..L7,Lgrip,R1..R7,Rgrip]"
+            "realrobot16_[L1..L7,Lgrip,R1..R7,Rgrip]"
             if tuple(index_map or ()) == ROBOTWIN_14_TO_BUILDING_BLOCK_16
             else None
         ),
@@ -338,7 +339,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Comma-separated old-index to new-index mapping used for every expanded "
-            "state/action channel. For the RoboTwin 14D -> building-block 16D layout "
+            "state/action channel. For the RoboTwin 14D -> real-robot 16D layout "
             "the default is 0,1,2,3,4,5,7,8,9,10,11,12,13,15."
         ),
     )
@@ -371,7 +372,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         and old_action_dim in (None, 14)
     ):
         # The released RT model is a RoboTwin 14D checkpoint and this adapter's
-        # target is the supplied 7-DoF-per-arm building-block recording.
+        # target is the supplied 7-DoF-per-arm real-robot recording.
         index_map = ROBOTWIN_14_TO_BUILDING_BLOCK_16
     adapted_state, report = adapt_state_dict(
         state_dict,

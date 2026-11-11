@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert the building-block LeRobot export to Efficient-WAM's clean layout.
+"""Convert a 16D LeRobot export to Efficient-WAM's clean layout.
 
 The released Efficient-WAM RoboTwin packer consumes one task directory with
 per-episode action tensors, videos, and text metadata.  The LeRobot recording
@@ -16,6 +16,7 @@ avoids loading an entire episode into Python memory.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import shutil
 import subprocess
@@ -31,7 +32,7 @@ CAMERAS = {
     "left_wrist": "observation.images.left_wrist",
     "right_wrist": "observation.images.right_wrist",
 }
-INSTRUCTION = "Stack the blocks into a tower."
+INSTRUCTION = "Put all fruits into the large basket first, then put all blocks into the small basket."
 
 
 def _episode_id(path: Path) -> int:
@@ -60,6 +61,52 @@ def _find_episode_files(dataset_root: Path) -> List[Path]:
     if not candidates:
         raise FileNotFoundError(f"No per-episode parquet files below {dataset_root}")
     return candidates
+
+
+def _read_episode_ids(path: Path) -> set[int]:
+    """Read an explicit episode whitelist from a CSV/JSON manifest.
+
+    The Classify Objects workbook matcher is the authority for labels.  This
+    helper deliberately accepts only an explicit ``episode_id`` (or
+    ``episode_index``) column and never infers IDs from row order.
+    """
+
+    path = path.expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"episode manifest does not exist: {path}")
+    suffix = path.suffix.lower()
+    rows: list[dict[str, Any]]
+    if suffix in {".json", ".jsonl"}:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            for key in ("episodes", "rows", "manifest"):
+                if isinstance(payload.get(key), list):
+                    payload = payload[key]
+                    break
+        if not isinstance(payload, list):
+            raise ValueError(f"episode manifest must contain a list: {path}")
+        rows = [dict(item) for item in payload if isinstance(item, dict)]
+    else:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            rows = [dict(item) for item in csv.DictReader(handle)]
+    ids: set[int] = set()
+    for row_number, row in enumerate(rows, 2):
+        raw = row.get("episode_id", row.get("episode_index"))
+        if raw in (None, ""):
+            raise ValueError(f"episode manifest row {row_number} has no episode_id: {path}")
+        try:
+            value = float(str(raw).strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid episode_id {raw!r} on row {row_number}: {path}") from exc
+        if not value.is_integer():
+            raise ValueError(f"episode_id must be integral, got {raw!r} on row {row_number}: {path}")
+        status = str(row.get("match_status", "matched") or "matched").strip().lower()
+        if status not in {"matched", "match", "ok", "valid", "true", "1"}:
+            continue
+        ids.add(int(value))
+    if not ids:
+        raise ValueError(f"episode manifest contains no matched episode IDs: {path}")
+    return ids
 
 
 def _video_path(video_root: Path, feature: str, episode: int) -> Path:
@@ -117,14 +164,19 @@ def convert(
     *,
     video_root: Path | None = None,
     instruction: str = INSTRUCTION,
+    task_name: str = "classify_objects",
     start_episode: int = 0,
     end_episode: int | None = None,
+    episode_ids_file: Path | None = None,
     overwrite: bool = False,
 ) -> Dict[str, Any]:
     dataset_root = dataset_root.expanduser().resolve()
     video_root = (video_root or dataset_root).expanduser().resolve()
     output_root = output_root.expanduser().resolve()
-    task_root = output_root / "clean" / "building_block_towers"
+    if not task_name or any(char in task_name for char in "/\\"):
+        raise ValueError(f"task_name must be a simple directory name: {task_name!r}")
+    task_root = output_root / "clean" / task_name
+    episode_ids = _read_episode_ids(episode_ids_file) if episode_ids_file else None
     for name in ("qpos", "state", "videos", "metas", "umt5_wan"):
         (task_root / name).mkdir(parents=True, exist_ok=True)
 
@@ -132,6 +184,8 @@ def convert(
     for parquet_path in _find_episode_files(dataset_root):
         episode = _episode_id(parquet_path)
         if episode < start_episode or (end_episode is not None and episode > end_episode):
+            continue
+        if episode_ids is not None and episode not in episode_ids:
             continue
         table = pq.read_table(parquet_path)
         action = _as_matrix(table["action"].to_pylist(), "action", episode)
@@ -162,9 +216,9 @@ def convert(
             "state": str(state_path),
             "video": str(mosaic_path),
             "meta": str(meta_path),
-            # This experiment intentionally uses all 100 episodes for training.
-            # Real-robot evaluation is performed after fine-tuning, not by
-            # marking a subset of episodes as an offline validation split.
+            # The caller controls the episode whitelist.  Validation episodes
+            # must be excluded before conversion rather than mixed into this
+            # packed training root.
             "split": "train",
         })
 
@@ -172,7 +226,7 @@ def convert(
         raise ValueError("No episodes selected")
     manifest = {
         "format": "efficient_wam_robotwin_clean_from_lerobot",
-        "task": "building_block_towers",
+        "task": task_name,
         "instruction": instruction,
         "state_action_separate": True,
         "state_dim": 16,
@@ -192,8 +246,18 @@ def main() -> int:
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--video-root", type=Path)
     parser.add_argument("--instruction", default=INSTRUCTION)
+    parser.add_argument(
+        "--task-name",
+        default="classify_objects",
+        help="task directory/manifest name (default: classify_objects)",
+    )
     parser.add_argument("--start-episode", type=int, default=0)
     parser.add_argument("--end-episode", type=int)
+    parser.add_argument(
+        "--episode-ids-file",
+        type=Path,
+        help="CSV/JSON manifest with an explicit episode_id whitelist",
+    )
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     result = convert(**vars(args))

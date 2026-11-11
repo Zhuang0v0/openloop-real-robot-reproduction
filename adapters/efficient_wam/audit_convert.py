@@ -494,7 +494,7 @@ def stage_dataset(
         ]
         instruction = next(
             (candidate.read_text(encoding="utf-8").strip() for candidate in instruction_candidates if candidate.exists()),
-            "Build a tower with the building blocks.",
+            "Put all fruits into the large basket first, then put all blocks into the small basket.",
         )
 
     try:

@@ -30,6 +30,9 @@ def main() -> int:
     wan_root = Path(
         os.environ.get("WAN_MODEL_ROOT", model_root / "Wan2.2-TI2V-5B")
     ).expanduser().resolve()
+    efficient_source_root = Path(
+        os.environ.get("EFFICIENT_SOURCE_ROOT", run_root / "efficient_source")
+    ).expanduser().resolve()
     stage2 = Path(
         os.environ.get(
             "STAGE2_CHECKPOINT",
@@ -42,6 +45,7 @@ def main() -> int:
         "__DATA_ROOT__": str(data_root),
         "__MODEL_ROOT__": str(model_root),
         "__RUN_ROOT__": str(run_root),
+        "__EFFICIENT_SOURCE_ROOT__": str(efficient_source_root),
         "__WAN_MODEL_ROOT__": str(wan_root),
         "__STAGE2_CHECKPOINT__": str(stage2),
     }

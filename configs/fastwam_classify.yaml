@@ -1,0 +1,23 @@
+model: fastwam
+task_name: classify_objects
+instruction: "Put all fruits into the large basket first, then put all blocks into the small basket."
+checkpoint_env: FASTWAM_CHECKPOINT
+source_env: FASTWAM_ROOT
+data_env: DATASET_ROOT
+output_env: RUN_ROOT
+manifest_env: CLASSIFY_MANIFEST
+filter_strategy: baseline
+
+# Conservative small-data fine-tuning defaults; override from the launcher.
+batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 5.0e-5
+weight_decay: 1.0e-2
+max_steps: 2000
+save_every: 250
+eval_every: 250
+mixed_precision: bf16
+freeze_video_backbone: true
+train_action_expert: true
+action_horizon: 16
+seed: 20261111

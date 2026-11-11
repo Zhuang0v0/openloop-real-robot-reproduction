@@ -1,0 +1,40 @@
+model: efficient_wam_rt
+task_name: classify_objects
+instruction: "Put all fruits into the large basket first, then put all blocks into the small basket."
+checkpoint_env: EFFICIENT_INPUT_CHECKPOINT
+source_env: EFFICIENT_WAM_ROOT
+data_env: DATASET_ROOT
+output_env: RUN_ROOT
+manifest_env: CLASSIFY_MANIFEST
+filter_strategy: baseline
+
+# Training and inference use different notions of "steps".  The fine-tuning
+# scheduler samples 10 flow-matching bins; RT inference runs 10 action steps,
+# but computes the video branch only at steps 0 and 1.
+training_denoising_steps: 10
+
+# Stage 2 is the default: keep the WAN/video expert frozen and adapt actions.
+stage2:
+  max_steps: 1500
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 8
+  action_learning_rate: 5.0e-6
+  video_learning_rate: 0.0
+  wan_frozen: true
+  action_weight: 1.0
+  video_weight: 0.01
+
+# Optional short Stage 3 continuation after Stage 2 has been checked.
+stage3:
+  enabled: false
+  max_steps: 750
+  action_learning_rate: 2.0e-6
+  video_learning_rate: 5.0e-7
+  wan_frozen: false
+
+# RT inference is separate from the training scheduler.
+inference:
+  num_inference_steps: 10
+  video_refresh_steps: [0, 1]
+training_scheduler_timesteps: 1000
+seed: 20261111

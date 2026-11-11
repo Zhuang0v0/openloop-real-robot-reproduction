@@ -1,0 +1,54 @@
+# Classify Objects packed-dataset template. Render paths before use.
+name: classify_objects_efficient_wam_16d
+output_root: __RUN_ROOT__/efficient_train_dataset
+
+source:
+  type: robotwin
+  # The launcher may place the converted clean source on a separate data
+  # volume.  Render this path from EFFICIENT_SOURCE_ROOT instead of assuming
+  # it lives under RUN_ROOT.
+  root: __EFFICIENT_SOURCE_ROOT__/clean/classify_objects
+  task_mode: single
+  task_name: classify_objects
+  data_mode: clean
+  num_video_frames: 8
+  video_size: [384, 320]
+  global_downsample_rate: 3
+  video_action_freq_ratio: 2
+  action_normalization:
+    enabled: true
+    type: mean_std
+
+latent:
+  vae_path: __WAN_MODEL_ROOT__/Wan2.2_VAE.pth
+  precision: bfloat16
+  shard_size: 4096
+  future_video_size: [192, 160]
+  reuse_condition_latent_from_clean: true
+
+language:
+  items_per_shard: 64
+  dtype: keep
+
+dataset:
+  type: efficient_wam_train
+  max_open_shards: 8
+  validate_runtime: true
+  language_policy: first
+  sampling:
+    mode: per_episode_random
+    samples_per_episode: 32
+    seed: 20261111
+
+build:
+  device: cuda
+  batch_size: 1
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  qpos_cache_size: 8
+  progress_interval_seconds: 2.0
+  log_level: INFO
+  dist_timeout_minutes: 240
+  verify_condition_latent: true
