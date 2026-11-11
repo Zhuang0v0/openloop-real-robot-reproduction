@@ -41,8 +41,10 @@ REQUIRED_LAYERS = {
 #   [left joint 1..7, left gripper, right joint 1..7, right gripper].
 # This map is old-index -> new-index.  The two new 7th-joint slots are zero
 # initialized; all pretrained gripper/joint channels retain their semantics.
-# Kept under the historical constant name for checkpoint/report compatibility.
-ROBOTWIN_14_TO_BUILDING_BLOCK_16 = (0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15)
+# RoboTwin's 14D channel order mapped to the 16D real-robot recording used by
+# Classify Objects.  The name is task-neutral because the same physical layout
+# is shared by both model adapters.
+ROBOTWIN_14_TO_REAL_ROBOT_16 = (0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15)
 
 
 def _torch_load(path: Path) -> Any:
@@ -243,7 +245,7 @@ def adapt_state_dict(
         # Make the known RoboTwin -> real-robot layout the safe default
         # even for callers that omit checkpoint metadata.  A non-14D source
         # then fails map validation instead of silently using positional append.
-        index_map = ROBOTWIN_14_TO_BUILDING_BLOCK_16
+        index_map = ROBOTWIN_14_TO_REAL_ROBOT_16
     output = dict(state_dict)
     transformed: List[Dict[str, Any]] = []
     recognized = set()
@@ -314,7 +316,7 @@ def adapt_state_dict(
         "index_map_semantics": (
             "RoboTwin14_[L1..L6,Lgrip,R1..R6,Rgrip] -> "
             "realrobot16_[L1..L7,Lgrip,R1..R7,Rgrip]"
-            if tuple(index_map or ()) == ROBOTWIN_14_TO_BUILDING_BLOCK_16
+            if tuple(index_map or ()) == ROBOTWIN_14_TO_REAL_ROBOT_16
             else None
         ),
         "recognized_layers": sorted(recognized),
@@ -373,7 +375,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ):
         # The released RT model is a RoboTwin 14D checkpoint and this adapter's
         # target is the supplied 7-DoF-per-arm real-robot recording.
-        index_map = ROBOTWIN_14_TO_BUILDING_BLOCK_16
+        index_map = ROBOTWIN_14_TO_REAL_ROBOT_16
     adapted_state, report = adapt_state_dict(
         state_dict,
         state_dim=args.state_dim,

@@ -51,7 +51,7 @@ import json, torch
 import os
 root=Path(os.environ['TASK'])
 q=sorted((root/'qpos').glob('*.pt')); s=sorted((root/'state').glob('*.pt')); v=sorted((root/'videos').glob('*.mp4')); l=sorted((root/'umt5_wan').glob('*.pt'))
-expected=int(__import__('os').environ.get('EXPECTED_EPISODES','100'))
+expected=int(__import__('os').environ.get('EXPECTED_EPISODES','106'))
 assert len(q)==len(s)==len(v)==len(l)==expected, (len(q),len(s),len(v),len(l),expected)
 qa=torch.load(q[0],map_location='cpu'); st=torch.load(s[0],map_location='cpu'); emb=torch.load(l[0],map_location='cpu')
 assert tuple(qa.shape[1:])==(16,), qa.shape

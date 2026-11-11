@@ -106,8 +106,8 @@ def main() -> None:
     parser.add_argument(
         "--episodes",
         type=int,
-        default=int(os.environ.get("EXPECTED_EPISODES", "100")),
-        help="expected episode count (default: 100)",
+        default=int(os.environ.get("EXPECTED_EPISODES", "106")),
+        help="expected episode count (default: 106)",
     )
     args = parser.parse_args()
     report = validate(args.dataset_root, args.episodes)

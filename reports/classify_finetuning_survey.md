@@ -44,7 +44,7 @@ that still need an experiment on the target data.
   starts at `5e-6` for action parameters. These are conservative starting
   points, not paper-certified optima.
 - Compute normalization only from the selected training episodes. Never reuse
-  building-block statistics, and never compute statistics from validation
+  statistics from another task, and never compute statistics from validation
   episodes.
 - Split by complete episode, stratified by C1-C4. Action windows from one
   episode must not appear in both sets.
