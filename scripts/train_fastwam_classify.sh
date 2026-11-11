@@ -104,7 +104,4 @@ PYTHONPATH="$PROJECT_ROOT/adapters/fastwam${PYTHONPATH:+:$PYTHONPATH}" \
   save_every="${FASTWAM_SAVE_EVERY:-250}" \
   eval_every="${FASTWAM_EVAL_EVERY:-250}" \
   wandb.enabled=false \
-  "classify.manifest=$TRAIN_MANIFEST" \
-  "classify.validation_manifest=$VAL_MANIFEST" \
-  "override_instruction=$INSTRUCTION" \
   "${HYDRA_VAL_ARGS[@]}"

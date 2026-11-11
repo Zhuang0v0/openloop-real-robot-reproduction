@@ -24,6 +24,11 @@ checkpoints/
 logs/
 outputs/
 vendor/FastWAM/
+# Efficient-WAM's train-time Python modules live in a directory named
+# ``models``.  Keep the source modules, while the generic model-artifact rule
+# below continues to ignore checkpoints and other large weights.
+!vendor/Efficient-WAM/models/
+!vendor/Efficient-WAM/models/*.py
 **/data/**/*.mp4
 **/data/**/*.parquet
 **/data/**/*.pt

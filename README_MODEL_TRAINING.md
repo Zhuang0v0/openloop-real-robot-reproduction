@@ -236,7 +236,7 @@ tools/                    Excel 映射、审计、动作分析、窗口准备
 adapters/fastwam/         FastWAM manifest 适配器
 adapters/efficient_wam/   Efficient-WAM 转换器与 16D 配置
 scripts/                  下载、适配、训练和评估入口
-vendor/Efficient-WAM/     上游 Efficient-WAM 源码副本
+vendor/Efficient-WAM/     上游 Efficient-WAM 源码副本（含训练所需 models/*.py）
 reports/                  调研、审计、训练计划和质量报告模板
 tests/                    不依赖大数据/权重的单元测试
 ```
