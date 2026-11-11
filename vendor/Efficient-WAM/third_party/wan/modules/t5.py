@@ -475,14 +475,21 @@ class T5EncoderModel:
         self,
         text_len,
         dtype=torch.bfloat16,
-        device=torch.cuda.current_device(),
+        device=None,
         checkpoint_path=None,
         tokenizer_path=None,
         shard_fn=None,
     ):
         self.text_len = text_len
         self.dtype = dtype
-        self.device = device
+        # Resolve the default at call time.  Evaluating current_device() in
+        # the function signature makes importing Efficient-WAM fail on a
+        # login/CPU node before a training process has been allocated.
+        self.device = (
+            torch.cuda.current_device() if device is None and torch.cuda.is_available() else device
+        )
+        if self.device is None:
+            self.device = "cpu"
         self.checkpoint_path = checkpoint_path
         self.tokenizer_path = tokenizer_path
 
@@ -491,7 +498,7 @@ class T5EncoderModel:
             encoder_only=True,
             return_tokenizer=False,
             dtype=dtype,
-            device=device).eval().requires_grad_(False)
+            device=self.device).eval().requires_grad_(False)
         logging.info(f'loading {checkpoint_path}')
         model.load_state_dict(torch.load(checkpoint_path, map_location='cpu'))
         self.model = model

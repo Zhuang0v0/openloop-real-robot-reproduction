@@ -69,6 +69,21 @@ bash scripts/clone_fastwam.sh
 export FASTWAM_PYTHON="$FASTWAM_ROOT/.venv/bin/python"
 ```
 
+Efficient-WAM 和 FastWAM 必须使用各自独立的 Python 环境；不要把一个环境
+的 `site-packages` 通过 `PYTHONPATH` 注入另一个环境。Efficient-WAM 的
+`torch` 与 `flash-attn` 必须是同一 CUDA/PyTorch ABI，并应在已分配 GPU 的
+节点上预检：
+
+```bash
+python -c "import torch, flash_attn; print(torch.__version__, torch.version.cuda, flash_attn.__version__); assert torch.cuda.is_available()"
+```
+
+如果出现 `flash_attn_2_cuda...undefined symbol`，说明环境不匹配；请重新
+激活由 `vendor/Efficient-WAM/envs/train.yaml` 创建的环境并安装匹配的
+`flash-attn`，不要用旧环境中的 wheel 继续训练。`easydict`、`deepspeed`、
+`pyarrow` 和 `decord` 也必须按依赖文件安装。登录节点没有 GPU 时可以做
+配置/语法检查，但不能把导入探针或 CPU 检查称为 GPU smoke。
+
 下载 ModelScope 的 `per_episode` 导出（SDK token 只通过环境变量或交互式
 输入提供）：
 
