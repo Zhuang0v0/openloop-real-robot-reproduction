@@ -37,9 +37,11 @@ that still need an experiment on the target data.
 
 ## Engineering choices for 106 episodes
 
-- Start with action-expert-only adaptation: FastWAM freezes the video backbone;
-  Efficient-WAM uses Stage 2 with frozen WAN. This reduces catastrophic
-  forgetting on a small real-robot set.
+- FastWAM's current upstream `dit_only` mode freezes WAN/VAE and other
+  non-DiT components, but trains the video DiT, action DiT, and proprio
+  encoder together. Efficient-WAM uses Stage 2 with frozen WAN and trains the
+  action expert only. These are different freeze policies and must be reported
+  separately rather than described as the same action-only recipe.
 - Use batch size 1 and accumulation 8. FastWAM starts at `5e-5`; Efficient-WAM
   starts at `5e-6` for action parameters. These are conservative starting
   points, not paper-certified optima.

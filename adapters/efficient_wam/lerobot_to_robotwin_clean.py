@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -37,8 +38,9 @@ INSTRUCTION = "Put all fruits into the large basket first, then put all blocks i
 
 def _episode_id(path: Path) -> int:
     stem = path.stem
-    if stem.startswith("episode_"):
-        return int(stem.split("_")[-1])
+    match = re.search(r"episode[_-](\d+)", stem, flags=re.IGNORECASE)
+    if match:
+        return int(match.group(1))
     raise ValueError(f"Cannot infer episode id from {path}")
 
 
@@ -55,12 +57,127 @@ def _as_matrix(values: Iterable[Any], name: str, episode: int) -> np.ndarray:
 
 
 def _find_episode_files(dataset_root: Path) -> List[Path]:
-    candidates = sorted((dataset_root / "data").rglob("episode_*.parquet"))
+    """Find frame parquet files in both LeRobot layouts.
+
+    ModelScope exports are commonly either one ``episode_*.parquet`` per
+    episode or LeRobot-v3 shards such as ``data/chunk-000/file-000.parquet``.
+    The latter stores the episode id in an ``episode_index`` column, so the
+    caller must group rows instead of inferring the id from the filename.
+    """
+
+    data_root = dataset_root / "data"
+    search_root = data_root if data_root.is_dir() else dataset_root
+    candidates: list[Path] = []
+    for path in sorted(search_root.rglob("*.parquet")):
+        if path.name.lower() in {"tasks.parquet", "episodes.parquet"}:
+            continue
+        # Avoid treating unrelated metadata tables as frame streams.  The
+        # schema check is intentionally cheap and does not read the payload.
+        try:
+            names = set(pq.read_schema(path).names)
+        except Exception:
+            names = set()
+        if names and not ({"action", "observation.state"} <= names):
+            continue
+        candidates.append(path)
     if not candidates:
-        candidates = sorted(dataset_root.rglob("episode_*.parquet"))
-    if not candidates:
-        raise FileNotFoundError(f"No per-episode parquet files below {dataset_root}")
+        raise FileNotFoundError(f"No frame parquet files below {search_root}")
     return candidates
+
+
+def _episode_records(dataset_root: Path) -> Dict[int, Dict[str, Any]]:
+    """Read frame parquet files and return one validated record per episode.
+
+    A shard may contain several episodes and an episode may span several
+    shards.  Rows are grouped by ``episode_index`` when present; per-episode
+    files continue to use their filename as the fallback id.  If every part
+    has ``frame_index``, rows are restored to chronological order across
+    shards.  No video or output file is touched by this helper.
+    """
+
+    parts: Dict[int, list[dict[str, Any]]] = {}
+    for file_order, parquet_path in enumerate(_find_episode_files(dataset_root)):
+        table = pq.read_table(parquet_path)
+        names = set(table.column_names)
+        if "action" not in names or "observation.state" not in names:
+            raise ValueError(f"Frame parquet is missing action/state columns: {parquet_path}")
+        action_values = table["action"].to_pylist()
+        state_values = table["observation.state"].to_pylist()
+        if len(action_values) != len(state_values):
+            raise ValueError(
+                f"Action/state row counts differ in {parquet_path}: "
+                f"{len(action_values)} vs {len(state_values)}"
+            )
+        row_count = len(action_values)
+        if "episode_index" in names:
+            episode_values = table["episode_index"].to_pylist()
+            if len(episode_values) != row_count:
+                raise ValueError(f"episode_index length differs in {parquet_path}")
+            episode_ids = sorted({int(value) for value in episode_values})
+        else:
+            episode_ids = [_episode_id(parquet_path)]
+            episode_values = [episode_ids[0]] * row_count
+
+        frame_values = table["frame_index"].to_pylist() if "frame_index" in names else None
+        if frame_values is not None and len(frame_values) != row_count:
+            raise ValueError(f"frame_index length differs in {parquet_path}")
+        for episode_id in episode_ids:
+            row_indices = [index for index, value in enumerate(episode_values) if int(value) == episode_id]
+            if not row_indices:
+                continue
+            action = _as_matrix((action_values[index] for index in row_indices), "action", episode_id)
+            state = _as_matrix((state_values[index] for index in row_indices), "state", episode_id)
+            if action.shape[0] != state.shape[0]:
+                raise ValueError(f"Episode {episode_id} action/state lengths differ in {parquet_path}")
+            frames = None if frame_values is None else np.asarray(
+                [frame_values[index] for index in row_indices], dtype=np.int64
+            )
+            parts.setdefault(episode_id, []).append(
+                {
+                    "action": action,
+                    "state": state,
+                    "frame_index": frames,
+                    "file_order": file_order,
+                    "source": str(parquet_path),
+                }
+            )
+
+    records: Dict[int, Dict[str, Any]] = {}
+    for episode_id, episode_parts in sorted(parts.items()):
+        with_frames = all(part["frame_index"] is not None for part in episode_parts)
+        if with_frames:
+            # Stable sort preserves source order for duplicate frame indices,
+            # while still restoring episodes split across shard boundaries.
+            order: list[tuple[int, int, int]] = []
+            for part_index, part in enumerate(episode_parts):
+                order.extend(
+                    (int(frame), part_index, row_index)
+                    for row_index, frame in enumerate(part["frame_index"])
+                )
+            order.sort(key=lambda item: item[0])
+            action = np.stack(
+                [episode_parts[part_index]["action"][row_index] for _, part_index, row_index in order],
+                axis=0,
+            )
+            state = np.stack(
+                [episode_parts[part_index]["state"][row_index] for _, part_index, row_index in order],
+                axis=0,
+            )
+            frame_index = np.asarray([frame for frame, _, _ in order], dtype=np.int64)
+        else:
+            episode_parts.sort(key=lambda part: int(part["file_order"]))
+            action = np.concatenate([part["action"] for part in episode_parts], axis=0)
+            state = np.concatenate([part["state"] for part in episode_parts], axis=0)
+            frame_index = None
+        records[int(episode_id)] = {
+            "action": action,
+            "state": state,
+            "frame_index": frame_index,
+            "sources": [part["source"] for part in episode_parts],
+        }
+    if not records:
+        raise ValueError(f"No episodes found in frame parquet files below {dataset_root}")
+    return records
 
 
 def _read_episode_ids(path: Path) -> set[int]:
@@ -181,17 +298,18 @@ def convert(
         (task_root / name).mkdir(parents=True, exist_ok=True)
 
     episodes: List[Dict[str, Any]] = []
-    for parquet_path in _find_episode_files(dataset_root):
-        episode = _episode_id(parquet_path)
+    records = _episode_records(dataset_root)
+    for episode, record in records.items():
         if episode < start_episode or (end_episode is not None and episode > end_episode):
             continue
         if episode_ids is not None and episode not in episode_ids:
             continue
-        table = pq.read_table(parquet_path)
-        action = _as_matrix(table["action"].to_pylist(), "action", episode)
-        state = _as_matrix(table["observation.state"].to_pylist(), "state", episode)
+        action = np.asarray(record["action"], dtype=np.float32)
+        state = np.asarray(record["state"], dtype=np.float32)
         if action.shape[0] != state.shape[0]:
-            raise ValueError(f"Episode {episode} action/state lengths differ: {action.shape} vs {state.shape}")
+            raise ValueError(
+                f"Episode {episode} action/state lengths differ: {action.shape} vs {state.shape}"
+            )
         action_path = task_root / "qpos" / f"episode_{episode:06d}.pt"
         state_path = task_root / "state" / f"episode_{episode:06d}.pt"
         if overwrite or not action_path.exists():

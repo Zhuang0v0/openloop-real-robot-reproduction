@@ -27,3 +27,24 @@ Efficient-WAM-RT 的训练配置使用 10 个 flow-matching bins；RT 推理使�
 `CLASSIFY_VAL_FRACTION=0`，但此时没有离线 validation。
 
 仓库不包含任何连接教程、凭据、数据集、模型大文件或个人路径。详见主文档。
+
+## 训练指南
+
+完整的跨机器安装、数据准备、筛选、微调、断点恢复和故障排查步骤见
+[Classify Objects 训练指南](docs/TRAINING_CLASSIFY_OBJECTS.md)。文档会区分
+已做的静态/单元校验与必须在有 GPU 节点补跑的 smoke、正式训练和真机评测；
+不要把未执行的 GPU 步骤当作已验证结果。
+
+## 当前验证边界
+
+本次交付检查时没有可调度的瀚海 A100，因此没有启动任何 GPU 测试或训练。
+已完成的仅是无 GPU 的 Python 单元/配置/路径检查。获得 GPU 后仍需按训练指南
+补跑并记录结果：
+
+- 下载后的完整 `nero_classify_objects` 数据审计和视频 probe；
+- FastWAM 一 episode smoke、正式微调和 checkpoint 加载验证；
+- Efficient-WAM-RT 一 episode smoke、Stage 2（以及需要时的 Stage 3）微调；
+- 两个模型的离线动作预测评估和独立真机成功率评测。
+
+这些项目当前均为“未执行”，不是失败或已通过；登录节点上的 CPU 导入、脚本
+启动和仓库级单元测试不能替代 GPU smoke。

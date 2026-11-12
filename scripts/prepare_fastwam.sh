@@ -9,11 +9,13 @@ DATA_ROOT="${DATA_ROOT:-$PROJECT_ROOT/data}"
 DATASET_ROOT="${DATASET_ROOT:-$DATA_ROOT/nero_classify_objects}"
 RUN="${FASTWAM_RUN_ROOT:-$RUN_ROOT/fastwam_real}"
 CHECKPOINT="${FASTWAM_CHECKPOINT:-$MODEL_ROOT/robotwin_uncond_3cam_384_16d.pt}"
+RESUME="${FASTWAM_RESUME:-$CHECKPOINT}"
 TASK_NAME="${FASTWAM_TASK_NAME:-classify_objects}"
 DATA_CONFIG_NAME="${FASTWAM_DATA_CONFIG_NAME:-$TASK_NAME}"
-TASK_CONFIG_NAME="${FASTWAM_TASK_CONFIG_NAME:-${TASK_NAME}_3cam_384_1e-4}"
+TASK_CONFIG_NAME="${FASTWAM_TASK_CONFIG_NAME:-${TASK_NAME}_3cam_384_5e-5}"
 MODEL_CONFIG_NAME="${FASTWAM_MODEL_CONFIG_NAME:-fastwam_real}"
 INSTRUCTION="${FASTWAM_INSTRUCTION:-Put all fruits into the large basket first, then put all blocks into the small basket.}"
+LEARNING_RATE="${FASTWAM_LEARNING_RATE:-5.0e-5}"
 ACTION_DIT_PATH="${FASTWAM_ACTION_DIT_PRETRAINED_PATH:-$RUN/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt}"
 FASTWAM_PYTHON="${FASTWAM_PYTHON:-$PYTHON_BIN}"
 FASTWAM_DEVICE="${FASTWAM_DEVICE:-cuda}"
@@ -42,15 +44,16 @@ mkdir -p "$R/configs/data" "$R/configs/task" "$R/configs/model"
 cp "$DATA_TEMPLATE" "$R/configs/data/$DATA_CONFIG_NAME.yaml"
 cp "$TASK_TEMPLATE" "$R/configs/task/$TASK_CONFIG_NAME.yaml"
 cp "$MODEL_TEMPLATE" "$R/configs/model/$MODEL_CONFIG_NAME.yaml"
-PROJECT_ROOT="$PROJECT_ROOT" DATASET_ROOT="$DATASET_ROOT" R="$R" RUN="$RUN" CHECKPOINT="$CHECKPOINT" DATA_TEMPLATE="$DATA_TEMPLATE" \
+PROJECT_ROOT="$PROJECT_ROOT" DATASET_ROOT="$DATASET_ROOT" R="$R" RUN="$RUN" CHECKPOINT="$CHECKPOINT" RESUME="$RESUME" DATA_TEMPLATE="$DATA_TEMPLATE" \
 TASK_NAME="$TASK_NAME" DATA_CONFIG_NAME="$DATA_CONFIG_NAME" TASK_CONFIG_NAME="$TASK_CONFIG_NAME" \
-MODEL_CONFIG_NAME="$MODEL_CONFIG_NAME" INSTRUCTION="$INSTRUCTION" ACTION_DIT_PATH="$ACTION_DIT_PATH" "$FASTWAM_PYTHON" - <<'PY'
+MODEL_CONFIG_NAME="$MODEL_CONFIG_NAME" INSTRUCTION="$INSTRUCTION" LEARNING_RATE="$LEARNING_RATE" \
+ACTION_DIT_PATH="$ACTION_DIT_PATH" "$FASTWAM_PYTHON" - <<'PY'
 import os
 from pathlib import Path
 import yaml
 base=Path(os.environ['PROJECT_ROOT']); dataset_root=Path(os.environ['DATASET_ROOT']); r=Path(os.environ['R']); run=Path(os.environ['RUN'])
-checkpoint=Path(os.environ['CHECKPOINT'])
-task_name=os.environ['TASK_NAME']; data_name=os.environ['DATA_CONFIG_NAME']; task_config_name=os.environ['TASK_CONFIG_NAME']; model_config_name=os.environ['MODEL_CONFIG_NAME']; instruction=os.environ['INSTRUCTION']; action_dit_path=Path(os.environ['ACTION_DIT_PATH'])
+checkpoint=Path(os.environ['CHECKPOINT']); resume=os.environ['RESUME']
+task_name=os.environ['TASK_NAME']; data_name=os.environ['DATA_CONFIG_NAME']; task_config_name=os.environ['TASK_CONFIG_NAME']; model_config_name=os.environ['MODEL_CONFIG_NAME']; instruction=os.environ['INSTRUCTION']; learning_rate=os.environ['LEARNING_RATE']; action_dit_path=Path(os.environ['ACTION_DIT_PATH'])
 data=(r/f'configs/data/{data_name}.yaml').read_text()
 data=data.replace('./data/robotwin2.0/robotwin2.0', str(dataset_root)).replace('${dataset_root}', str(dataset_root))
 data=(data.replace('key: cam_high','key: camera_3').replace('key: cam_left_wrist','key: left_wrist').replace('key: cam_right_wrist','key: right_wrist')
@@ -84,7 +87,10 @@ if isinstance(config.get('val'), dict):
 task=(r/f'configs/task/{task_config_name}.yaml').read_text()
 task=task.replace('override /data: robotwin','override /data: '+task_name)
 task=task.replace('override /model: fastwam','override /model: '+model_config_name)
-task=task.replace('batch_size: 16','batch_size: 1').replace('num_workers: 8','num_workers: 2').replace('gradient_accumulation_steps: 1','gradient_accumulation_steps: 8').replace('save_every: 2500','save_every: 250').replace('eval_every: 500','eval_every: 0').replace('eval_every: 100','eval_every: 0').replace('resume: null','resume: '+str(checkpoint))
+import re
+task=re.sub(r'(?m)^learning_rate:\s*[^#\n]+', 'learning_rate: '+learning_rate, task, count=1)
+task=task.replace('batch_size: 16','batch_size: 1').replace('num_workers: 8','num_workers: 2').replace('gradient_accumulation_steps: 1','gradient_accumulation_steps: 8').replace('save_every: 2500','save_every: 250').replace('eval_every: 500','eval_every: 0').replace('eval_every: 100','eval_every: 0')
+task=re.sub(r'(?m)^resume:\s*.*$', 'resume: '+resume, task, count=1)
 task += '\noutput_dir: '+str(run/'train')+'\n'
 (r/f'configs/task/{task_config_name}.yaml').write_text(task)
 model=(r/f'configs/model/{model_config_name}.yaml').read_text().replace('action_dit_pretrained_path: checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt','action_dit_pretrained_path: '+str(action_dit_path))

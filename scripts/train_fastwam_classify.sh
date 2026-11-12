@@ -16,6 +16,7 @@ FASTWAM_PYTHON="${FASTWAM_PYTHON:-$FASTWAM_ROOT/.venv/bin/python}"
 CHECKPOINT="${FASTWAM_CHECKPOINT:-$MODEL_ROOT/robotwin_uncond_3cam_384_16d.pt}"
 MANIFEST="${CLASSIFY_MANIFEST:-$RUN_ROOT/classify_episode_manifest.csv}"
 STRATEGY="${CLASSIFY_FILTER_STRATEGY:-baseline}"
+QUALITY_THRESHOLD="${CLASSIFY_QUALITY_THRESHOLD:-}"
 QUALITY_CSV="${CLASSIFY_QUALITY_CSV:-$RUN_ROOT/classify_action_quality.csv}"
 WINDOW_MANIFEST="${CLASSIFY_WINDOW_MANIFEST:-$RUN_ROOT/${STRATEGY}_windows.json}"
 TRAIN_MANIFEST="${CLASSIFY_TRAIN_MANIFEST:-$RUN_ROOT/${STRATEGY}_train.csv}"
@@ -29,13 +30,18 @@ test -f "$CHECKPOINT" || { echo "Missing adapted 16D checkpoint: $CHECKPOINT" >&
 test -d "$DATASET_ROOT" || { echo "Missing dataset: $DATASET_ROOT" >&2; exit 2; }
 mkdir -p "$RUN_ROOT"
 
-"$PYTHON_BIN" "$PROJECT_ROOT/tools/filter_classify_windows.py" \
-  --dataset-root "$DATASET_ROOT" --manifest "$MANIFEST" \
-  --strategy "$STRATEGY" --window-size "${CLASSIFY_WINDOW_SIZE:-33}" \
-  --stride "${CLASSIFY_WINDOW_STRIDE:-16}" --output "$WINDOW_MANIFEST" \
-  --quality-csv "$QUALITY_CSV" --seed "${CLASSIFY_SEED:-20261111}" \
-  --validation-fraction "$VAL_FRACTION" --test-fraction 0.0 \
+FILTER_ARGS=(
+  --dataset-root "$DATASET_ROOT" --manifest "$MANIFEST"
+  --strategy "$STRATEGY" --window-size "${CLASSIFY_WINDOW_SIZE:-33}"
+  --stride "${CLASSIFY_WINDOW_STRIDE:-16}" --output "$WINDOW_MANIFEST"
+  --quality-csv "$QUALITY_CSV" --seed "${CLASSIFY_SEED:-20261111}"
+  --validation-fraction "$VAL_FRACTION" --test-fraction 0.0
   --report "$RUN_ROOT/${STRATEGY}_quality_report.md"
+)
+if [[ -n "$QUALITY_THRESHOLD" ]]; then
+  FILTER_ARGS+=(--quality-threshold "$QUALITY_THRESHOLD")
+fi
+"$PYTHON_BIN" "$PROJECT_ROOT/tools/filter_classify_windows.py" "${FILTER_ARGS[@]}"
 
 PREPARED_ROOT="$RUN_ROOT/prepared"
 "$PYTHON_BIN" "$PROJECT_ROOT/tools/prepare_classify_data.py" \
@@ -65,6 +71,7 @@ RUN_ROOT="$RUN_ROOT" DATASET_ROOT="$DATASET_ROOT" PYTHON_BIN="$PYTHON_BIN" \
 FASTWAM_TASK_NAME=classify_objects FASTWAM_DATA_CONFIG_NAME=classify_objects \
 FASTWAM_TASK_CONFIG_NAME=classify_objects_3cam_384_5e-5 FASTWAM_MODEL_CONFIG_NAME=fastwam_classify \
 FASTWAM_INSTRUCTION="$INSTRUCTION" FASTWAM_CHECKPOINT="$CHECKPOINT" \
+FASTWAM_RESUME="${FASTWAM_RESUME:-$CHECKPOINT}" \
 FASTWAM_PYTHON="$FASTWAM_PYTHON" \
 FASTWAM_ACTION_DIT_PRETRAINED_PATH="${FASTWAM_ACTION_DIT_PRETRAINED_PATH:-$RUN_ROOT/fastwam/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt}" \
 FASTWAM_RUN_ROOT="$RUN_ROOT/fastwam" \

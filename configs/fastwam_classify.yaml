@@ -8,7 +8,18 @@ output_env: RUN_ROOT
 manifest_env: CLASSIFY_MANIFEST
 filter_strategy: baseline
 
+# Upstream provenance for the train-mode semantics documented below.  This is
+# a record only; `scripts/clone_fastwam.sh` may use a newer ref when the user
+# explicitly overrides FASTWAM_REF, so the checkout hash must be recorded in
+# the run manifest as well.
+upstream_repo: https://github.com/yuantianyuan01/FastWAM
+upstream_commit_audited: 7faa71108368fbb3b6885649f112af607427a2d4
+
 # Conservative small-data fine-tuning defaults; override from the launcher.
+# The audited upstream RoboTwin data template uses 33 observation frames,
+# yielding 32 action transitions per sample. ``action_dim`` is the channel
+# width and must not be confused with the temporal horizon. The launcher
+# rewrites the upstream 14D fields to the Classify Objects 16D contract.
 batch_size: 1
 gradient_accumulation_steps: 8
 learning_rate: 5.0e-5
@@ -17,7 +28,15 @@ max_steps: 2000
 save_every: 250
 eval_every: 250
 mixed_precision: bf16
-freeze_video_backbone: true
-train_action_expert: true
-action_horizon: 16
+# Upstream `trainer.py` calls this `dit_only`: it freezes non-DiT modules and
+# optimizes `model.dit` (the MoT containing both video and action experts),
+# plus the optional proprio encoder. These fields document that contract; the
+# actual behavior comes from the checked-out upstream trainer.
+train_mode: dit_only
+video_dit_trainable: true
+action_dit_trainable: true
+proprio_encoder_trainable: true
+observation_frames: 33
+action_horizon: 32
+action_dim: 16
 seed: 20261111

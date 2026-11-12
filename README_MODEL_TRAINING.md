@@ -37,6 +37,7 @@ export DATA_ROOT="${DATA_ROOT:-$PROJECT_ROOT/data}"
 export MODEL_ROOT="${MODEL_ROOT:-$PROJECT_ROOT/models}"
 export RUN_ROOT="${RUN_ROOT:-$PROJECT_ROOT/runs/classify_objects}"
 export PYTHON_BIN="${PYTHON_BIN:-python}"
+export EXCEL_PATH="${EXCEL_PATH:-$PROJECT_ROOT/task.xlsx}"
 export DATASET_ROOT="${DATASET_ROOT:-$DATA_ROOT/nero_classify_objects}"
 export EFFICIENT_WAM_ROOT="${EFFICIENT_WAM_ROOT:-$PROJECT_ROOT/vendor/Efficient-WAM}"
 export FASTWAM_ROOT="${FASTWAM_ROOT:-$PROJECT_ROOT/vendor/FastWAM}"
@@ -116,7 +117,7 @@ TI2V-5B、VAE 和 UMT5 文件。按各自上游模型卡下载并设置缓存目
 
 ```bash
 "$PYTHON_BIN" tools/match_classify_excel.py \
-  --excel <path/to/任务.xlsx> \
+  --excel "$EXCEL_PATH" \
   --dataset-root "$DATASET_ROOT" \
   --output-dir "$RUN_ROOT/mapping" \
   --sheet-name "classify objects" \
@@ -182,8 +183,9 @@ MODEL_ROOT="$MODEL_ROOT" PYTHON_BIN="$PYTHON_BIN" \
 
 ## 7. FastWAM 微调
 
-FastWAM 默认冻结视觉/video backbone，只更新 action expert；默认 batch 1、
-gradient accumulation 8、起始学习率 `5e-5`、最多 2000 steps。可通过
+FastWAM 使用上游 `dit_only` 训练模式：冻结 WAN/VAE 等非 DiT 组件，但同时
+训练 video DiT、action DiT 和 proprio encoder；默认 batch 1、gradient
+accumulation 8、起始学习率 `5e-5`、最多 2000 steps。可通过
 环境变量覆盖，但两个模型应保留各自的配置：
 
 ```bash
@@ -224,7 +226,7 @@ video branch 只在 `[0, 1]` 两个 step refresh。不要把“训练十步”�
 ## 9. Smoke、评估和报告
 
 正式训练前至少提交一个小规模 GPU smoke，验证前向、loss、反向、checkpoint
-保存/加载以及 16D shape。没有 GPU 或缺少模型缓存时，明确记录为未执行，
+保存/导出以及 16D shape。没有 GPU 或缺少模型缓存时，明确记录为未执行，
 不能把脚本启动成功称为训练成功。
 
 ```bash

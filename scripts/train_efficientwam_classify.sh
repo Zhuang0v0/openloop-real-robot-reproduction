@@ -16,6 +16,7 @@ EFFICIENT_WAM_ROOT="${EFFICIENT_WAM_ROOT:-$PROJECT_ROOT/vendor/Efficient-WAM}"
 WAN_MODEL_ROOT="${WAN_MODEL_ROOT:-$MODEL_ROOT/Wan2.2-TI2V-5B}"
 MANIFEST="${CLASSIFY_MANIFEST:-$RUN_ROOT/classify_episode_manifest.csv}"
 STRATEGY="${CLASSIFY_FILTER_STRATEGY:-baseline}"
+QUALITY_THRESHOLD="${CLASSIFY_QUALITY_THRESHOLD:-}"
 INSTRUCTION="Put all fruits into the large basket first, then put all blocks into the small basket."
 VAL_FRACTION="${CLASSIFY_VAL_FRACTION:-0.20}"
 EXPECTED_EPISODES="${EXPECTED_EPISODES:-106}"
@@ -30,13 +31,18 @@ mkdir -p "$RUN_ROOT"
 # reassigns the split from complete episode IDs, so overlapping windows from
 # one episode cannot leak across train and validation.
 WINDOW_MANIFEST="${CLASSIFY_WINDOW_MANIFEST:-$RUN_ROOT/${STRATEGY}_windows.json}"
-"$PYTHON_BIN" "$PROJECT_ROOT/tools/filter_classify_windows.py" \
-  --dataset-root "$DATASET_ROOT" --manifest "$MANIFEST" \
-  --strategy "$STRATEGY" --window-size "${CLASSIFY_WINDOW_SIZE:-33}" \
-  --stride "${CLASSIFY_WINDOW_STRIDE:-16}" --output "$WINDOW_MANIFEST" \
-  --quality-csv "${CLASSIFY_QUALITY_CSV:-$RUN_ROOT/classify_action_quality.csv}" \
-  --seed "$SEED" --validation-fraction "$VAL_FRACTION" --test-fraction 0.0 \
+FILTER_ARGS=(
+  --dataset-root "$DATASET_ROOT" --manifest "$MANIFEST"
+  --strategy "$STRATEGY" --window-size "${CLASSIFY_WINDOW_SIZE:-33}"
+  --stride "${CLASSIFY_WINDOW_STRIDE:-16}" --output "$WINDOW_MANIFEST"
+  --quality-csv "${CLASSIFY_QUALITY_CSV:-$RUN_ROOT/classify_action_quality.csv}"
+  --seed "$SEED" --validation-fraction "$VAL_FRACTION" --test-fraction 0.0
   --report "$RUN_ROOT/${STRATEGY}_quality_report.md"
+)
+if [[ -n "$QUALITY_THRESHOLD" ]]; then
+  FILTER_ARGS+=(--quality-threshold "$QUALITY_THRESHOLD")
+fi
+"$PYTHON_BIN" "$PROJECT_ROOT/tools/filter_classify_windows.py" "${FILTER_ARGS[@]}"
 
 PREPARED_ROOT="${CLASSIFY_PREPARED_ROOT:-$RUN_ROOT/prepared}"
 "$PYTHON_BIN" "$PROJECT_ROOT/tools/prepare_classify_data.py" \

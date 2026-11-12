@@ -2,6 +2,10 @@
 # no middle frames are deleted and concatenated into a new trajectory.
 window:
   observation_horizon: 2
+  # Reference action chunk used by the generic filter diagnostics. This is
+  # not FastWAM's temporal horizon: its upstream template uses 33 observation
+  # frames and therefore 32 action transitions per sample. Keep this key for
+  # Efficient-WAM/window reports and do not pass it as FastWAM num_frames.
   action_horizon: 16
   execution_horizon: 8
   stride: 1
