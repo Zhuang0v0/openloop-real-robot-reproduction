@@ -243,7 +243,8 @@ git -C "$FASTWAM_ROOT" rev-parse HEAD
 
 ### 5.1 数据
 
-`download_modelscope_dataset.py` 下载并校验 ModelScope 的 per-episode 导出，
+`download_modelscope_dataset.py` 下载并校验 ModelScope 的
+[`per_episode` 导出](https://modelscope.cn/datasets/XinyaoZhuang/nero_classify_objects/tree/master/per_episode)，
 token 只从环境变量或交互式输入读取，不会写入仓库：
 
 ```bash
@@ -273,6 +274,10 @@ test -d "$DATASET_ROOT/data" -a -d "$DATASET_ROOT/videos"
 
 如果数据已经由管理员上传，跳过下载，只需设置 `DATASET_ROOT`，并保留数据
 归档的校验记录。
+
+`任务.xlsx` 是 Excel 映射输入，不由本脚本从 ModelScope 猜测或生成。若它不在
+公开数据集归档中，需要由项目提供方单独交付；拿到后将 `EXCEL_PATH` 指向该文件，
+并确认其中存在名称完全匹配的 `classify objects` 工作表。
 
 ### 5.2 模型
 
